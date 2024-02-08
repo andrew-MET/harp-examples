@@ -4,12 +4,28 @@ format: html
 editor: visual
 ---
 
+In this tutorial, we will go through some basic methods to make maps in harp. It should be noted that harp version 0.2.2 is needed to follow all of the examples. We use R's native pipe `|>`, which is available in R since version 4.1.0. If your R version is older, you can use the {magrittr} pipe, `%>%` that is re-exported by harp packages. 
+
+## Data
+The data used in this tutorial are from the MEPS model, which is run as a collaboration between the meteorological institutes of Norway, Sweden, Finland and Estonia. The paths are set to get the data from internal disks at MET Norway. The data are also openly available on the MET Norway thredds server and can be read by replacing  
+
+```{r original-template, eval=FALSE}
+file_template = "meps_det",
+```
+
+in the calls to `read_forecast()` with
+
+```{r thredds-template, eval=FALSE}
+file_path     = "https://thredds.met.no/thredds/dodsC/meps25epsarchive", 
+file_template = "{YYYY}/{MM}/{DD}/meps_det_2_5km_{YYYY}{MM}{DD}T{HH}Z.nc",
+file_format   = "netcdf",
+```
+
 ## Attach the packages we're going to need
 
 ```{r packages, message=FALSE}
 library(harp)
 library(dplyr)
-library(tidyr)
 library(meteogrid)
 ```
 
@@ -21,7 +37,7 @@ $$
 z_{sfc}=\frac{\Phi_{sfc}}{9.80665}
 $$
 
-```{r read-data}
+```{r read-data, message=FALSE}
 sfc_geo <- read_forecast(
   2024013100,
   "meps",
@@ -33,7 +49,7 @@ sfc_geo <- read_forecast(
 ```
 
 We can now scale the surface geopotential to height in metres:
-```{r}
+```{r scale-sfc-geo}
 sfc_geo <- scale_param(sfc_geo, 1 / 9.80665, new_units = "m", mult = TRUE)
 ```
 
@@ -48,7 +64,7 @@ countries <- get_map(get_domain(sfc_geo$fcst), polygon = FALSE)
 
 By default, the map outline is from the "world" database in the _maps_ package. Higher resolution maps are available via the _rnaturalearthdata_ and _rnaturalearthhires_ packages. 
 
-```{r hires-map-outline}
+```{r hires-map-outline, message=FALSE}
 countries_hires <- get_map(
   get_domain(sfc_geo$fcst), 
   map     = rnaturalearthhires::countries10,
@@ -114,7 +130,7 @@ my_stations <- filter(
 ```
 
 We can now use these stations in the interpolate options for `read_forecast()`
-```{r interpolate-to-stations}
+```{r interpolate-to-stations, message=FALSE}
 stn_hgts <- read_forecast(
   2024013100,
   "meps",
@@ -132,12 +148,7 @@ stn_hgts <- read_forecast(
 The data are in lat-lon coordinates so we need to project them into the coordinate system of the maps.
 
 ```{r project-data}
-projection <- get_domain(sfc_geo$fcst)$projection
-stn_hgts <- mutate(
-  stn_hgts,
-  projected = project(lon, lat, proj = projection)
-) |> 
-  unnest(projected)
+stn_hgts <- geo_reproject(stn_hgts, sfc_geo$fcst)
 ```
 
 We can plot these values (rounded so they don't take loads of space) on the map using `geom_text()`
@@ -247,11 +258,7 @@ t2m_stns <- geo_points(t2m, points = my_stations)
 
 And we need to reproject
 ```{r project-t2m-stns}
-t2m_stns <- mutate(
-  t2m_stns, 
-  projected = project(lon, lat, proj = projection)
-) |> 
-  unnest(projected)
+t2m_stns <- geo_reproject(t2m_stns, t2m$fcst)
 ```
 
 And now we can plot the anomaly at our locations on any given day
@@ -269,7 +276,7 @@ ggplot() +
     filter(t2m_stns, fcst_dttm == as_dttm(2023100100))
   ) +
   scale_fill_binned(
-    bquote(~degree*"C"), 
+    bquote(degree*"C"), 
     low = "white", high = "red", 
     breaks = seq(-12, 20, 2)
   ) +
