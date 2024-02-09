@@ -4,10 +4,11 @@ format: html
 editor: visual
 ---
 
-In this tutorial, we will go through some basic methods to make maps in harp. It should be noted that harp version 0.2.2 is needed to follow all of the examples. We use R's native pipe `|>`, which is available in R since version 4.1.0. If your R version is older, you can use the {magrittr} pipe, `%>%` that is re-exported by harp packages. 
+In this tutorial, we will go through some basic methods to make maps in harp. It should be noted that harp version 0.2.2 is needed to follow all of the examples. We use R's native pipe `|>`, which is available in R since version 4.1.0. If your R version is older, you can use the {magrittr} pipe, `%>%` that is re-exported by harp packages.
 
 ## Data
-The data used in this tutorial are from the MEPS model, which is run as a collaboration between the meteorological institutes of Norway, Sweden, Finland and Estonia. The paths are set to get the data from internal disks at MET Norway. The data are also openly available on the MET Norway thredds server and can be read by replacing  
+
+The data used in this tutorial are from the MEPS model, which is run as a collaboration between the meteorological institutes of Norway, Sweden, Finland and Estonia. The paths are set to get the data from internal disks at MET Norway. The data are also openly available on the MET Norway thredds server and can be read by replacing
 
 ```{r original-template, eval=FALSE}
 file_template = "meps_det",
@@ -49,20 +50,32 @@ sfc_geo <- read_forecast(
 ```
 
 We can now scale the surface geopotential to height in metres:
+
 ```{r scale-sfc-geo}
 sfc_geo <- scale_param(sfc_geo, 1 / 9.80665, new_units = "m", mult = TRUE)
 ```
 
-
 ## Get the map outline
 
-We can get a map outline by getting the domain from the forecast column in the data. By setting `polygon = FALSE`, the map is returned as paths rather than polygons since paths are slightly easier to plot. 
+We can get a map outline by getting the domain from the forecast column in the data. By setting `polygon = FALSE`, the map is returned as paths rather than polygons since paths are slightly easier to plot.
 
 ```{r map-outline}
 countries <- get_map(get_domain(sfc_geo$fcst), polygon = FALSE)
 ```
 
-By default, the map outline is from the "world" database in the _maps_ package. Higher resolution maps are available via the _rnaturalearthdata_ and _rnaturalearthhires_ packages. 
+By default, the map outline is from the "world" database in the *maps* package. Higher resolution maps are available via the *rnaturalearthdata* and *rnaturalearthhires* packages.
+
+::: {.callout-note collapse="true"}
+## A note about compatibility of rnaturalearth data
+
+rnaturalearth have recently change the format of their data from `Spatial*DataFrame` to `sf`. However the `maps` package that `get_map()` uses in the background has not yet caught up with these changes. Therefore, older versions of the `rnaturalearth` packages need to be installed with:
+
+```{r rnaturalearth, eval=FALSE}
+remotes::install_version("rnaturalearth", "0.3.4")
+remotes::install_version("rnaturalearthdata", "0.2.1")
+remotes::install_github("ropensci/rnaturalearthhires", "c3785a8c44738de6ae8f797080c0a337ebed929d")
+```
+:::
 
 ```{r hires-map-outline, message=FALSE}
 countries_hires <- get_map(
@@ -72,10 +85,9 @@ countries_hires <- get_map(
 )
 ```
 
-
 ## Plot using ggplot
 
-The `geom_georaster()` geom, that is a harp extension to ggplot can be used to plot the 2d field. 
+The `geom_georaster()` geom, that is a harp extension to ggplot can be used to plot the 2d field.
 
 ```{r basic-plot}
 ggplot() +
@@ -83,7 +95,7 @@ ggplot() +
   geom_path(aes(x, y), countries)
 ```
 
-By default the axes are stretched to fill the plot window and a margin is added. We can fix this with `coord_equal(expand = FALSE)`, and remove the superfluous axis labels with `theme_harp_map()`. In addition, to speed up plotting the data can be upscaled using the downsample method, whereby pixels are dropped prior to plotting - this is useful for testing, but it may be better not to use it for the final plot. 
+By default the axes are stretched to fill the plot window and a margin is added. We can fix this with `coord_equal(expand = FALSE)`, and remove the superfluous axis labels with `theme_harp_map()`. In addition, to speed up plotting the data can be upscaled using the downsample method, whereby pixels are dropped prior to plotting - this is useful for testing, but it may be better not to use it for the final plot.
 
 ```{r sized-plot}
 ggplot() +
@@ -98,7 +110,8 @@ ggplot() +
   theme_harp_map()
 ```
 
-We can also add a better colour scale using `scale_fill_gradientn()`. Note that the limits argument sets the limits of the colour scale - this is just to make the plot look nicer - a specific landmask should probably be used really. The oob argument tells it what to do with data that are outside the limits. 
+We can also add a better colour scale using `scale_fill_gradientn()`. Note that the limits argument sets the limits of the colour scale - this is just to make the plot look nicer - a specific landmask should probably be used really. The oob argument tells it what to do with data that are outside the limits.
+
 ```{r colour-scale-sized-plot}
 ggplot() +
   geom_georaster(
@@ -120,7 +133,7 @@ ggplot() +
 
 ## Get model elevation interpolated to stations
 
-Now, let's say we want to add some text to the plot, e.g. for terrain height in Oslo, Bergen, Trondheim and Tromsø. We can get the interpolated terrain height by reading the data and interpolating it. We'll start by filtering the built in station list. 
+Now, let's say we want to add some text to the plot, e.g. for terrain height in Oslo, Bergen, Trondheim and Tromsø. We can get the interpolated terrain height by reading the data and interpolating it. We'll start by filtering the built in station list.
 
 ```{r filter-stations}
 my_stations <- filter(
@@ -130,6 +143,7 @@ my_stations <- filter(
 ```
 
 We can now use these stations in the interpolate options for `read_forecast()`
+
 ```{r interpolate-to-stations, message=FALSE}
 stn_hgts <- read_forecast(
   2024013100,
@@ -152,6 +166,7 @@ stn_hgts <- geo_reproject(stn_hgts, sfc_geo$fcst)
 ```
 
 We can plot these values (rounded so they don't take loads of space) on the map using `geom_text()`
+
 ```{r terrain-plot-with-labels}
 ggplot() +
   geom_georaster(
@@ -182,7 +197,7 @@ x <- seq(dom_info$x0, dom_info$x1, dom_info$dx)
 y <- seq(dom_info$y0, dom_info$y1, dom_info$dy)
 ```
 
-We'll also use the higher resolution map outline as we're zoomed in. 
+We'll also use the higher resolution map outline as we're zoomed in.
 
 ```{r plot-subset}
 ggplot() +
@@ -206,7 +221,9 @@ ggplot() +
 ```
 
 ## 3-month means
-Reading in 3 months of data, with one field per day results in about 740MB for MEPS data. 
+
+Reading in 3 months of data, with one field per day results in about 740MB for MEPS data.
+
 ```{r 3-month-t2m, message=FALSE}
 t2m <- read_forecast(
     seq_dttm(2023090100, 2023113000, "1d"),
@@ -219,12 +236,14 @@ t2m <- read_forecast(
   scale_param(-273.15, "degC")
 ```
 
-We can easily get the mean and add it as a column - each row will have the same value. 
+We can easily get the mean and add it as a column - each row will have the same value.
+
 ```{r mean-t2m}
 t2m <- mutate(t2m, fcst_mean = mean(fcst))
 ```
 
 And we can also add an anomaly from the mean column
+
 ```{r anom-t2m}
 t2m <- mutate(t2m, fcst_anom = fcst - fcst_mean)
 ```
@@ -257,11 +276,13 @@ t2m_stns <- geo_points(t2m, points = my_stations)
 ```
 
 And we need to reproject
+
 ```{r project-t2m-stns}
 t2m_stns <- geo_reproject(t2m_stns, t2m$fcst)
 ```
 
 And now we can plot the anomaly at our locations on any given day
+
 ```{r t2m-with-stns}
 ggplot() + 
   geom_georaster(
@@ -290,4 +311,3 @@ ggplot() +
   theme_harp_map() + 
   theme(legend.key.height = unit(3.5, "lines"))
 ```
-
